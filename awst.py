@@ -57,10 +57,12 @@ def describeEc2(session,instance_id=None):
     table.add_row(['Availability Zone', instance.placement['AvailabilityZone']])
     table.add_row(['Key Name', instance.key_name])
     table.add_row(['AMI Id', instance.image_id])
-    table.add_row(['Security Groups', ', '.join([group['GroupName'] for group in instance.security_groups])])
 
     # Print the formatted table
     print(table)
+
+
+
         # Display attached volume information
     volumes = list(instance.volumes.all())
     
@@ -81,6 +83,39 @@ def describeEc2(session,instance_id=None):
         print(volume_table)
     else:
         print("\nNo attached volumes for this instance.")
+
+# Create a PrettyTable for security group information
+    security_group_table = PrettyTable()
+    security_group_table.field_names = ['Security Group Name', 'Inbound Ports', 'IP Ranges']
+    
+    # Get security group names, inbound ports, and IP ranges
+    for group in instance.security_groups:
+        group_name = group['GroupName']
+        permissions = ec2.SecurityGroup(group['GroupId']).ip_permissions
+        
+        inbound_ports = []
+        ip_ranges = []
+        
+        for permission in permissions:
+            from_port = permission.get('FromPort', 'N/A')
+            to_port = permission.get('ToPort', 'N/A')
+            ip_protocol = permission.get('IpProtocol', 'N/A')
+            
+            # Collect inbound port information
+            inbound_ports.append(f"{ip_protocol}:{from_port}-{to_port}")
+            
+            # Collect IP range information
+            for ip_range in permission.get('IpRanges', []):
+                ip_ranges.append(ip_range['CidrIp'])
+        
+        security_group_table.add_row([group_name, ', '.join(inbound_ports), ', '.join(ip_ranges)])
+
+    # Print the security group table
+    print("\nSecurity Group Information:")
+    print(security_group_table)
+
+
+
 
 
 
