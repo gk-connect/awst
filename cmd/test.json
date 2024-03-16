@@ -1,0 +1,189 @@
+{
+    AmiLaunchIndex: 0,
+    Architecture: "x86_64",
+    BlockDeviceMappings: [{
+        DeviceName: "/dev/sda1",
+        Ebs: {
+          AttachTime: 2023-08-28 09:51:06 +0000 UTC,
+          DeleteOnTermination: true,
+          Status: "attached",
+          VolumeId: "vol-0d037878d1abafbe1"
+        }
+      },{
+        DeviceName: "/dev/sdf",
+        Ebs: {
+          AttachTime: 2023-08-28 09:51:27 +0000 UTC,
+          DeleteOnTermination: false,
+          Status: "attached",
+          VolumeId: "vol-042ac4c241b491344"
+        }
+      }],
+    CapacityReservationSpecification: {
+      CapacityReservationPreference: "open"
+    },
+    ClientToken: "terraform-2023082809510229130000001b",
+    CpuOptions: {
+      CoreCount: 2,
+      ThreadsPerCore: 2
+    },
+    CurrentInstanceBootMode: "legacy-bios",
+    EbsOptimized: false,
+    EnaSupport: true,
+    EnclaveOptions: {
+      Enabled: false
+    },
+    HibernationOptions: {
+      Configured: false
+    },
+    Hypervisor: "xen",
+    IamInstanceProfile: {
+      Arn: "arn:aws:iam::234524369779:instance-profile/PROD-JENKINS-CICD-01-PROFILE",
+      Id: "AIPATNGV54NZ4RTLCAFOV"
+    },
+    ImageId: "ami-0f5ee92e2d63afc18",
+    InstanceId: "i-0b8bf9c55deb41794",
+    InstanceType: "r6a.xlarge",
+    KeyName: "PROD-AWS",
+    LaunchTime: 2023-08-28 09:51:05 +0000 UTC,
+    MaintenanceOptions: {
+      AutoRecovery: "default"
+    },
+    MetadataOptions: {
+      HttpEndpoint: "enabled",
+      HttpProtocolIpv6: "disabled",
+      HttpPutResponseHopLimit: 1,
+      HttpTokens: "optional",
+      InstanceMetadataTags: "enabled",
+      State: "applied"
+    },
+    Monitoring: {
+      State: "disabled"
+    },
+    NetworkInterfaces: [{
+        Attachment: {
+          AttachTime: 2023-08-28 09:51:05 +0000 UTC,
+          AttachmentId: "eni-attach-012b6171f53c6a85a",
+          DeleteOnTermination: false,
+          DeviceIndex: 0,
+          NetworkCardIndex: 0,
+          Status: "attached"
+        },
+        Description: "Attached on PROD-JENKINS-CICD-01 Instance",
+        Groups: [{
+            GroupId: "sg-08755c9006df88ee2",
+            GroupName: "terraform-20230828071716326400000001"
+          },{
+            GroupId: "sg-0c92737db2979bd86",
+            GroupName: "terraform-20230828095054193000000005"
+          },{
+            GroupId: "sg-024cedd5c32d743a1",
+            GroupName: "terraform-20230828071716326600000002"
+          }],
+        InterfaceType: "interface",
+        MacAddress: "06:9a:24:d2:57:de",
+        NetworkInterfaceId: "eni-005b9c12507fa99e7",
+        OwnerId: "234524369779",
+        PrivateDnsName: "ip-10-30-47-62.ap-south-1.compute.internal",
+        PrivateIpAddress: "10.30.47.62",
+        PrivateIpAddresses: [{
+            Primary: true,
+            PrivateDnsName: "ip-10-30-47-62.ap-south-1.compute.internal",
+            PrivateIpAddress: "10.30.47.62"
+          }],
+        SourceDestCheck: true,
+        Status: "in-use",
+        SubnetId: "subnet-0c5544d9a4e8fcbc1",
+        VpcId: "vpc-071e18144728deb02"
+      }],
+    Placement: {
+      AvailabilityZone: "ap-south-1c",
+      GroupName: "",
+      Tenancy: "default"
+    },
+    PlatformDetails: "Linux/UNIX",
+    PrivateDnsName: "ip-10-30-47-62.ap-south-1.compute.internal",
+    PrivateDnsNameOptions: {
+      EnableResourceNameDnsAAAARecord: false,
+      EnableResourceNameDnsARecord: false,
+      HostnameType: "ip-name"
+    },
+    PrivateIpAddress: "10.30.47.62",
+    PublicDnsName: "",
+    RootDeviceName: "/dev/sda1",
+    RootDeviceType: "ebs",
+    SecurityGroups: [{
+        GroupId: "sg-08755c9006df88ee2",
+        GroupName: "terraform-20230828071716326400000001"
+      },{
+        GroupId: "sg-0c92737db2979bd86",
+        GroupName: "terraform-20230828095054193000000005"
+      },{
+        GroupId: "sg-024cedd5c32d743a1",
+        GroupName: "terraform-20230828071716326600000002"
+      }],
+    SourceDestCheck: true,
+    State: {
+      Code: 16,
+      Name: "running"
+    },
+    StateTransitionReason: "",
+    SubnetId: "subnet-0c5544d9a4e8fcbc1",
+    Tags: [
+      {
+        Key: "AZ",
+        Value: "AP-SOUTH-1C"
+      },
+      {
+        Key: "CREATOR",
+        Value: "TERRAFORM"
+      },
+      {
+        Key: "PROJECT",
+        Value: "PLATFORM"
+      },
+      {
+        Key: "ENV",
+        Value: "PROD"
+      },
+      {
+        Key: "APP",
+        Value: "JENKINS"
+      },
+      {
+        Key: "Name",
+        Value: "PROD-JENKINS-CICD-01"
+      },
+      {
+        Key: "OWNER",
+        Value: "PLATFORM"
+      },
+      {
+        Key: "TYPE",
+        Value: "CICD"
+      },
+      {
+        Key: "ORG",
+        Value: "CHALO"
+      },
+      {
+        Key: "BACKUP",
+        Value: "0"
+      },
+      {
+        Key: "MONITOR",
+        Value: "0"
+      },
+      {
+        Key: "SEQ",
+        Value: "01"
+      },
+      {
+        Key: "SERVICE",
+        Value: "JENKINS"
+      }
+    ],
+    UsageOperation: "RunInstances",
+    UsageOperationUpdateTime: 2023-08-28 09:51:05 +0000 UTC,
+    VirtualizationType: "hvm",
+    VpcId: "vpc-071e18144728deb02"
+  }
