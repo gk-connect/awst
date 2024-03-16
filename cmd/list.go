@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/fatih/color"
 
@@ -16,6 +17,7 @@ var errorColor = color.New(color.FgRed)
 var successColor = color.New(color.FgGreen)
 var region string
 var profile string
+var filter string
 
 // listCmd represents the list command
 var listCmd = &cobra.Command{
@@ -47,6 +49,8 @@ func init() {
 	rootCmd.AddCommand(listCmd)
 	listCmd.Flags().StringVarP(&region, "region", "r", defaultRegion, "AWS region")
 	listCmd.Flags().StringVarP(&profile, "profile", "p", "", "AWS profile")
+	listCmd.Flags().StringVarP(&filter, "filter", "f", "", "Filter")
+
 }
 
 func getEc2List() {
@@ -148,8 +152,23 @@ func getEc2List() {
 				statusColor = color.New(color.FgGreen) // Change color to green if status is "true"
 			}
 
-			row := []string{*instance.InstanceId, instanceName, *instance.State.Name, *instance.InstanceType, privateIp, publicIp, statusColor.Sprint(status)}
-			allRows = append(allRows, row)
+			if len(filter) > 0 {
+				if (strings.Contains(strings.ToLower(*instance.InstanceId), strings.ToLower(filter))) ||
+					(strings.Contains(strings.ToLower(instanceName), strings.ToLower(filter))) ||
+					(strings.Contains(strings.ToLower(*instance.State.Name), strings.ToLower(filter))) ||
+					(strings.Contains(strings.ToLower(*instance.InstanceType), strings.ToLower(filter))) ||
+					(strings.Contains(strings.ToLower(privateIp), strings.ToLower(filter))) ||
+					(strings.Contains(strings.ToLower(publicIp), strings.ToLower(filter))) ||
+					(strings.Contains(strings.ToLower(status), strings.ToLower(filter))) {
+					row := []string{*instance.InstanceId, instanceName, *instance.State.Name, *instance.InstanceType, privateIp, publicIp, statusColor.Sprint(status)}
+					allRows = append(allRows, row)
+				}
+
+			} else {
+				row := []string{*instance.InstanceId, instanceName, *instance.State.Name, *instance.InstanceType, privateIp, publicIp, statusColor.Sprint(status)}
+				allRows = append(allRows, row)
+			}
+
 		}
 
 		// fmt.Println(len(allRows))
@@ -172,13 +191,3 @@ func getEc2List() {
 	}
 	tbl.Print()
 }
-
-// func getInstanceIds(result *ec2.DescribeInstancesOutput) []*string {
-// 	var instanceIds []*string
-// 	for _, reservation := range result.Reservations {
-// 		for _, instance := range reservation.Instances {
-// 			instanceIds = append(instanceIds, instance.InstanceId)
-// 		}
-// 	}
-// 	return instanceIds
-// }
