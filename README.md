@@ -10,6 +10,7 @@ AWST is a command-line tool for managing AWS resources. It provides various comm
 To install AWST, run:
 ```
 ```bash
+go build -o awst
 sudo cp awst /usr/local/bin/awst
 ```
 
