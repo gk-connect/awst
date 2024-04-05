@@ -51,6 +51,10 @@ Connect to an EC2 instance using a specific key:
 ```bash
 awst connect --profile myprofile --filter myinstance --key mykey --key-path /path/to/key
 ```
+### List Load Balancers
+```bash
+awst list lb --profile <myprofile> --region <region> --filter <filter>
+```
 
 ## Contributing
 

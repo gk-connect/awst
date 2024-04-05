@@ -9,6 +9,8 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/aws/aws-sdk-go/service/elb"
+	"github.com/aws/aws-sdk-go/service/elbv2"
 	"github.com/rodaine/table"
 	"github.com/spf13/cobra"
 )
@@ -18,6 +20,14 @@ var successColor = color.New(color.FgGreen)
 var region string
 var profile string
 var filter string
+
+type LoadBalancer struct {
+	Name    string
+	DNSName string
+	Type    string
+	Scheme  string
+	VPC     string
+}
 
 // listCmd represents the list command
 var listCmd = &cobra.Command{
@@ -35,6 +45,8 @@ var listCmd = &cobra.Command{
 				getEc2List()
 			} else if args[0] == "rds" {
 				successColor.Printf("Invoked rds")
+			} else if args[0] == "lb" {
+				getLbList()
 			} else {
 				errorColor.Printf("Usage: awst list <ec2/rds> <region> <profile>")
 			}
@@ -51,6 +63,146 @@ func init() {
 	listCmd.Flags().StringVarP(&profile, "profile", "p", "", "AWS profile")
 	listCmd.Flags().StringVarP(&filter, "filter", "f", "", "Filter")
 
+}
+
+func getLbList() {
+	loadBalancerDetails, err := getAllLoadBalancers(profile, region)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+
+	headerFmt := color.New(color.FgGreen, color.Underline).SprintfFunc()
+	columnFmt := color.New(color.FgYellow).SprintfFunc()
+
+	tbl := table.New("Name", "DNS Name", "Type", "Scheme", "VPC")
+	tbl.WithHeaderFormatter(headerFmt).WithFirstColumnFormatter(columnFmt)
+
+	for _, lb := range loadBalancerDetails {
+		if len(filter) > 0 {
+			if strings.Contains(strings.ToLower(lb.Name), strings.ToLower(filter)) {
+				tbl.AddRow(lb.Name, lb.DNSName, lb.Type, lb.Scheme, lb.VPC)
+			}
+		} else {
+			tbl.AddRow(lb.Name, lb.DNSName, lb.Type, lb.Scheme, lb.VPC)
+		}
+
+	}
+	tbl.Print()
+
+}
+
+func getAllLoadBalancers(profile, region string) ([]LoadBalancer, error) {
+	// Create a new session with AWS credentials and configuration
+	sess := session.Must(session.NewSessionWithOptions(session.Options{
+		Profile:           profile,
+		Config:            aws.Config{Region: aws.String(region)},
+		SharedConfigState: session.SharedConfigEnable,
+	}))
+
+	// Initialize slice to store load balancers
+	var lbDetails []LoadBalancer
+
+	// Describe Classic Load Balancers
+	classicLBs, err := describeClassicLoadBalancers(sess)
+	if err != nil {
+		return nil, err
+	}
+	lbDetails = append(lbDetails, classicLBs...)
+
+	// Describe Application Load Balancers
+	albList, err := describeApplicationLoadBalancers(sess)
+	if err != nil {
+		return nil, err
+	}
+	lbDetails = append(lbDetails, albList...)
+
+	// Describe Network Load Balancers
+	nlbList, err := describeNetworkLoadBalancers(sess)
+	if err != nil {
+		return nil, err
+	}
+	lbDetails = append(lbDetails, nlbList...)
+
+	return lbDetails, nil
+}
+
+func describeClassicLoadBalancers(sess *session.Session) ([]LoadBalancer, error) {
+	// Create a new ELB client
+	svc := elb.New(sess)
+
+	// Describe Classic Load Balancers
+	input := &elb.DescribeLoadBalancersInput{}
+	result, err := svc.DescribeLoadBalancers(input)
+	if err != nil {
+		return nil, err
+	}
+
+	// Extract Classic Load Balancer details from the result
+	var lbDetails []LoadBalancer
+	for _, lb := range result.LoadBalancerDescriptions {
+		lbDetails = append(lbDetails, LoadBalancer{
+			Name:    *lb.LoadBalancerName,
+			DNSName: *lb.DNSName,
+			Type:    "Classic",
+			Scheme:  *lb.Scheme,
+			VPC:     *lb.VPCId,
+		})
+	}
+
+	return lbDetails, nil
+}
+
+func describeApplicationLoadBalancers(sess *session.Session) ([]LoadBalancer, error) {
+	// Create a new ELBV2 client
+	svc := elbv2.New(sess)
+
+	// Describe Application Load Balancers
+	input := &elbv2.DescribeLoadBalancersInput{}
+	result, err := svc.DescribeLoadBalancers(input)
+	if err != nil {
+		return nil, err
+	}
+
+	// Extract Application Load Balancer details from the result
+	var lbDetails []LoadBalancer
+	for _, lb := range result.LoadBalancers {
+		lbDetails = append(lbDetails, LoadBalancer{
+			Name:    *lb.LoadBalancerName,
+			DNSName: *lb.DNSName,
+			Type:    "Application",
+			Scheme:  *lb.Scheme,
+			VPC:     *lb.VpcId,
+		})
+	}
+
+	return lbDetails, nil
+}
+
+func describeNetworkLoadBalancers(sess *session.Session) ([]LoadBalancer, error) {
+	// Create a new ELBV2 client
+	svc := elbv2.New(sess)
+
+	// Describe Network Load Balancers
+	input := &elbv2.DescribeLoadBalancersInput{}
+	result, err := svc.DescribeLoadBalancers(input)
+	if err != nil {
+		return nil, err
+	}
+
+	// Extract Network Load Balancer details from the result
+	var lbDetails []LoadBalancer
+	for _, lb := range result.LoadBalancers {
+		lbDetails = append(lbDetails, LoadBalancer{
+			Name:    *lb.LoadBalancerName,
+			DNSName: *lb.DNSName,
+			Type:    "Network",
+			Scheme:  *lb.Scheme,
+			VPC:     *lb.VpcId,
+		})
+	}
+
+	return lbDetails, nil
 }
 
 func getEc2List() {
