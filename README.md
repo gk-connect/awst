@@ -1,4 +1,4 @@
-Here's the markdown code for the GitHub README.md file:
+
 
 ```markdown
 # AWST (Amazon Web Services Tool)
