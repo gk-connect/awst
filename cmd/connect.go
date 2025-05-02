@@ -84,6 +84,7 @@ func getEc2Instances() {
 	ec2List := []string{}
 	ec2SshKey := []string{}
 	ec2Ip := []string{}
+	ec2Id := []string{}
 	ec2Data := make(map[string][]string)
 	for _, reservation := range result.Reservations {
 		for _, instance := range reservation.Instances {
@@ -116,7 +117,7 @@ func getEc2Instances() {
 			} else {
 				ec2SshKey = append(ec2SshKey, connectKey)
 			}
-
+			ec2Id = append(ec2Id, *instance.InstanceId)
 			ec2List = append(ec2List, instanceName+" ["+*instance.InstanceId+"]  => "+publicIp+" / "+privateIp)
 
 		}
@@ -124,6 +125,7 @@ func getEc2Instances() {
 	ec2Data["ec2_list"] = ec2List
 	ec2Data["ec2_ip"] = ec2Ip
 	ec2Data["ec2_key"] = ec2SshKey
+	ec2Data["ec2_id"] = ec2Id
 
 	interactivePrompt(ec2Data)
 
@@ -154,25 +156,29 @@ func interactivePrompt(ec2Data map[string][]string) {
 		return
 	}
 
-	initateSshSession(ec2Data["ec2_key"][selectItemIndex]+".pem", ec2User, ec2Data["ec2_ip"][selectItemIndex])
+	// initiateSshSession(ec2Data["ec2_key"][selectItemIndex]+".pem", ec2User, ec2Data["ec2_ip"][selectItemIndex])
+
+	initiateProfileSession(ec2User, ec2Data["ec2_id"][selectItemIndex])
 
 }
 
-func initateSshSession(sshKey string, sshUser string, sshIp string) {
+func initiateProfileSession(sshUser string, instanceId string) {
 
-	if sshKey == "NONE.pem" {
-		fmt.Println("No Valid Key Found")
-		return
+	awsProfile := profile
+	awsRegion := region
+	cmd := "aws"
+	args := []string{
+		"ssm", "start-session",
+		"--target", instanceId,
+		"--document-name", "AWS-StartInteractiveCommand",
+		"--parameters", "command=[\"sudo su - " + sshUser + "\"]",
+		"--profile", awsProfile,
+		"--region", awsRegion,
 	}
 
-	successColor.Println("Executing.. ssh -i " + connectKeyPath + sshKey + " " + sshUser + "@" + sshIp)
-
-	cmd := "ssh"
-
-	// Arguments for the command
-	args := []string{"-i", connectKeyPath + sshKey, sshUser + "@" + sshIp}
-
 	// Execute the command
+
+	successColor.Println("Executing.. aws ssm start-session --target " + instanceId + " --document-name AWS-StartSSHSession" + " --parameters " + "command=[sudo su - " + sshUser + "]" + " --profile " + awsProfile + " --region " + awsRegion)
 	session := exec.Command(cmd, args...)
 	session.Stdin = os.Stdin
 	session.Stdout = os.Stdout
@@ -184,6 +190,34 @@ func initateSshSession(sshKey string, sshUser string, sshIp string) {
 		return
 	}
 }
+
+// func initiateSshSession(sshKey string, sshUser string, sshIp string) {
+
+// 	if sshKey == "NONE.pem" {
+// 		fmt.Println("No Valid Key Found")
+// 		return
+// 	}
+
+// 	successColor.Println("Executing.. ssh -i " + connectKeyPath + sshKey + " " + sshUser + "@" + sshIp)
+
+// 	cmd := "ssh"
+
+// 	// Arguments for the command
+// 	args := []string{"-i", connectKeyPath + sshKey, sshUser + "@" + sshIp}
+
+// 	// Execute the command
+// 	session := exec.Command(cmd, args...)
+// 	session.Stdin = os.Stdin
+// 	session.Stdout = os.Stdout
+// 	session.Stderr = os.Stderr
+
+// 	err := session.Run()
+// 	if err != nil {
+// 		errorColor.Println("Error:", err)
+// 		return
+// 	}
+// }
+
 func findIndex(slice []string, item string) int {
 	for i, v := range slice {
 		if v == item {
