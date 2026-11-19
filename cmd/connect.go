@@ -1,228 +1,127 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/fatih/color"
 	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
 )
 
-var connectIp string
-var connectKey string
-var connectKeyPath string
-
-// connectCmd represents the connect command
 var connectCmd = &cobra.Command{
 	Use:   "connect",
-	Short: "A brief description of your command",
-	Long:  "connect to aws ec2 isntances",
-	Run: func(cmd *cobra.Command, args []string) {
-		if connectIp != "private" && connectIp != "public" {
-			errorColor.Println("Available SSH Ip options are private/public")
-			return
+	Short: "Pick a running EC2 instance and open an SSM shell on it",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if filter == "" {
+			return errors.New("--filter is required")
 		}
-
-		if !(len(filter) > 0) {
-			errorColor.Println("Use --filter flag with valid data")
-			return
-		}
-		getEc2Instances()
-
+		return connect()
 	},
 }
 
-func init() {
-	defaultRegion := "ap-south-1"
-	rootCmd.AddCommand(connectCmd)
-	connectCmd.Flags().StringVarP(&profile, "profile", "p", "", "AWS profile")
-	connectCmd.Flags().StringVarP(&region, "region", "r", defaultRegion, "AWS region")
-	connectCmd.Flags().StringVarP(&filter, "filter", "f", "", "Filter")
-	connectCmd.Flags().StringVarP(&connectIp, "ssh-ip-type", "i", "private", "SSH Ip Adress")
-	connectCmd.Flags().StringVarP(&connectKey, "key", "k", "NONE", "SSH Key")
-	connectCmd.Flags().StringVarP(&connectKeyPath, "key-path", "l", "~/.ssh/", "SSH Key Path")
-}
+func init() { rootCmd.AddCommand(connectCmd) }
 
-func getEc2Instances() {
-	awsProfile := profile
-	awsRegion := region
-	sess := session.Must(session.NewSessionWithOptions(session.Options{
-		Profile: awsProfile,
-		Config: aws.Config{
-			Region:                        aws.String(awsRegion),
-			CredentialsChainVerboseErrors: aws.Bool(true),
-		},
-		SharedConfigState: session.SharedConfigEnable,
-	}))
+type host struct{ Name, ID, Type, AZ, Private, Public string }
 
-	svc := ec2.New(sess)
-	input := &ec2.DescribeInstancesInput{
-		Filters: []*ec2.Filter{
-			{
-				Name: aws.String("tag:Name"),
-				Values: []*string{
-					aws.String("*" + strings.ToUpper(filter) + "*"),
-					aws.String("*" + strings.ToLower(filter) + "*"),
-					aws.String("*" + strings.ToTitle(filter) + "*"),
-				},
-			},
-		},
+func connect() error {
+	for bin, hint := range map[string]string{
+		"aws":                    "install AWS CLI v2: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html",
+		"session-manager-plugin": "install the Session Manager plugin: https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html",
+	} {
+		if _, err := exec.LookPath(bin); err != nil {
+			return fmt.Errorf("%s not found on PATH; %s", bin, hint)
+		}
 	}
-	result, err := svc.DescribeInstances(input)
+	sess, err := newSession()
 	if err != nil {
-		fmt.Println("Error describing instances:", err)
-		return
+		return err
 	}
-
-	// fmt.Println(result)
-
-	ec2List := []string{}
-	ec2SshKey := []string{}
-	ec2Ip := []string{}
-	ec2Id := []string{}
-	ec2Data := make(map[string][]string)
-	for _, reservation := range result.Reservations {
-		for _, instance := range reservation.Instances {
-			instanceName := "-"
-			// fmt.Println(*instance.InstanceId)
-			if len(instance.Tags) > 0 {
-				for _, tag := range instance.Tags {
-					if *tag.Key == "Name" {
-						instanceName = *tag.Value
-						break
-					}
+	input := &ec2.DescribeInstancesInput{Filters: []*ec2.Filter{
+		{Name: aws.String("instance-state-name"), Values: aws.StringSlice([]string{"running"})},
+	}}
+	var hosts []host
+	done := loading("running instances")
+	err = ec2.New(sess).DescribeInstancesPages(input, func(page *ec2.DescribeInstancesOutput, _ bool) bool {
+		for _, r := range page.Reservations {
+			for _, i := range r.Instances {
+				h := host{Name: nameTag(i.Tags), ID: aws.StringValue(i.InstanceId), Type: aws.StringValue(i.InstanceType),
+					Private: orDash(i.PrivateIpAddress), Public: orDash(i.PublicIpAddress)}
+				if i.Placement != nil {
+					h.AZ = aws.StringValue(i.Placement.AvailabilityZone)
+				}
+				if matches(h.Name, h.ID, h.Private, h.Public) {
+					hosts = append(hosts, h)
 				}
 			}
-			publicIp := "-"
-			if instance.PublicIpAddress != nil {
-				publicIp = *instance.PublicIpAddress
-			}
-			privateIp := "-"
-			if instance.PrivateIpAddress != nil {
-				privateIp = *instance.PrivateIpAddress
-			}
-
-			if connectIp == "public" {
-				ec2Ip = append(ec2Ip, publicIp)
-			} else {
-				ec2Ip = append(ec2Ip, privateIp)
-			}
-			if instance.KeyName != nil {
-				ec2SshKey = append(ec2SshKey, *instance.KeyName)
-			} else {
-				ec2SshKey = append(ec2SshKey, connectKey)
-			}
-			ec2Id = append(ec2Id, *instance.InstanceId)
-			ec2List = append(ec2List, instanceName+" ["+*instance.InstanceId+"]  => "+publicIp+" / "+privateIp)
-
 		}
-	}
-	ec2Data["ec2_list"] = ec2List
-	ec2Data["ec2_ip"] = ec2Ip
-	ec2Data["ec2_key"] = ec2SshKey
-	ec2Data["ec2_id"] = ec2Id
-
-	interactivePrompt(ec2Data)
-
-}
-
-func interactivePrompt(ec2Data map[string][]string) {
-	ec2_prompt := promptui.Select{
-		Label: "Select your instance to SSH",
-		Items: ec2Data["ec2_list"],
-	}
-
-	_, ec2Item, err := ec2_prompt.Run()
+		return true
+	})
+	done()
 	if err != nil {
-		errorColor.Printf("Prompt failed %v\n", err)
-		return
+		return fmt.Errorf("describing instances: %w", err)
 	}
-
-	selectItemIndex := findIndex(ec2Data["ec2_list"], ec2Item)
-
-	user_prompt := promptui.Select{
-		Label: "Select your instance to SSH",
-		Items: []string{"ubuntu", "root", "ec2-user", "admin", "centos", "debian"},
+	if len(hosts) == 0 {
+		return fmt.Errorf("no running instances match %q in %s", filter, region)
 	}
+	sort.SliceStable(hosts, func(a, b int) bool { return strings.ToLower(hosts[a].Name) < strings.ToLower(hosts[b].Name) })
 
-	_, ec2User, err := user_prompt.Run()
+	h := hosts[0]
+	if len(hosts) == 1 {
+		fmt.Printf("%s %s %s\n", color.GreenString("✔"), bold(h.Name), dim(h.ID+"  "+h.Private))
+	} else {
+		w := 0
+		for _, x := range hosts {
+			w = max(w, len(x.Name))
+		}
+		row := fmt.Sprintf(`{{ printf "%%-%ds" .Name }}  {{ .ID | faint }}  {{ .Private | faint }}`, w)
+		idx, _, err := (&promptui.Select{
+			Label: fmt.Sprintf("%d instances · ↑/↓ move · / search · enter select", len(hosts)),
+			Items: hosts,
+			Size:  15,
+			Templates: &promptui.SelectTemplates{
+				Label:    "{{ . | bold }}",
+				Active:   "▸ " + strings.Replace(row, ".Name }}", ".Name }} | cyan | bold", 1),
+				Inactive: "  " + row,
+				Selected: `{{ "✔" | green }} {{ .Name | bold }} {{ .ID | faint }}`,
+				Details: `
+{{ "Type:" | faint }} {{ .Type }}   {{ "AZ:" | faint }} {{ .AZ }}   {{ "Private:" | faint }} {{ .Private }}   {{ "Public:" | faint }} {{ .Public }}`,
+			},
+			Searcher: func(in string, i int) bool {
+				x := hosts[i]
+				return strings.Contains(strings.ToLower(x.Name+" "+x.ID+" "+x.Private+" "+x.Public), strings.ToLower(in))
+			},
+		}).Run()
+		if err != nil {
+			return err
+		}
+		h = hosts[idx]
+	}
+	_, user, err := (&promptui.Select{
+		Label:     "Log in as",
+		Items:     []string{"ubuntu", "root", "ec2-user", "admin", "centos", "debian"},
+		Templates: &promptui.SelectTemplates{Label: "{{ . | bold }}", Active: "▸ {{ . | cyan | bold }}", Inactive: "  {{ . }}", Selected: `{{ "✔" | green }} {{ . | bold }}`},
+	}).Run()
 	if err != nil {
-		errorColor.Printf("Prompt failed %v\n", err)
-		return
+		return err
 	}
 
-	// initiateSshSession(ec2Data["ec2_key"][selectItemIndex]+".pem", ec2User, ec2Data["ec2_ip"][selectItemIndex])
-
-	initiateProfileSession(ec2User, ec2Data["ec2_id"][selectItemIndex])
-
-}
-
-func initiateProfileSession(sshUser string, instanceId string) {
-
-	awsProfile := profile
-	awsRegion := region
-	cmd := "aws"
-	args := []string{
-		"ssm", "start-session",
-		"--target", instanceId,
+	args := []string{"ssm", "start-session",
+		"--target", h.ID,
 		"--document-name", "AWS-StartInteractiveCommand",
-		"--parameters", "command=[\"sudo su - " + sshUser + "\"]",
-		"--profile", awsProfile,
-		"--region", awsRegion,
+		"--parameters", fmt.Sprintf(`command=["sudo su - %s"]`, user),
+		"--region", region}
+	if profile != "" {
+		args = append(args, "--profile", profile)
 	}
-
-	// Execute the command
-
-	successColor.Println("Executing.. aws ssm start-session --target " + instanceId + " --document-name AWS-StartSSHSession" + " --parameters " + "command=[sudo su - " + sshUser + "]" + " --profile " + awsProfile + " --region " + awsRegion)
-	session := exec.Command(cmd, args...)
-	session.Stdin = os.Stdin
-	session.Stdout = os.Stdout
-	session.Stderr = os.Stderr
-
-	err := session.Run()
-	if err != nil {
-		errorColor.Println("Error:", err)
-		return
-	}
-}
-
-// func initiateSshSession(sshKey string, sshUser string, sshIp string) {
-
-// 	if sshKey == "NONE.pem" {
-// 		fmt.Println("No Valid Key Found")
-// 		return
-// 	}
-
-// 	successColor.Println("Executing.. ssh -i " + connectKeyPath + sshKey + " " + sshUser + "@" + sshIp)
-
-// 	cmd := "ssh"
-
-// 	// Arguments for the command
-// 	args := []string{"-i", connectKeyPath + sshKey, sshUser + "@" + sshIp}
-
-// 	// Execute the command
-// 	session := exec.Command(cmd, args...)
-// 	session.Stdin = os.Stdin
-// 	session.Stdout = os.Stdout
-// 	session.Stderr = os.Stderr
-
-// 	err := session.Run()
-// 	if err != nil {
-// 		errorColor.Println("Error:", err)
-// 		return
-// 	}
-// }
-
-func findIndex(slice []string, item string) int {
-	for i, v := range slice {
-		if v == item {
-			return i
-		}
-	}
-	return -1 // Item not found
+	fmt.Println(dim("$ aws " + strings.Join(args, " ")))
+	c := exec.Command("aws", args...)
+	c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
+	return c.Run()
 }
