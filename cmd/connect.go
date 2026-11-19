@@ -82,12 +82,13 @@ func connect() error {
 		}
 		row := fmt.Sprintf(`{{ printf "%%-%ds" .Name }}  {{ .ID | faint }}  {{ .Private | faint }}`, w)
 		idx, _, err := (&promptui.Select{
-			Label: fmt.Sprintf("%d instances · ↑/↓ move · / search · enter select", len(hosts)),
-			Items: hosts,
-			Size:  15,
+			Label:    fmt.Sprintf("%d instances · ↑/↓ move · / search · enter select", len(hosts)),
+			Items:    hosts,
+			Size:     15,
+			HideHelp: true,
 			Templates: &promptui.SelectTemplates{
 				Label:    "{{ . | bold }}",
-				Active:   "▸ " + strings.Replace(row, ".Name }}", ".Name }} | cyan | bold", 1),
+				Active:   "▸ " + strings.Replace(row, ".Name }}", ".Name | cyan | bold }}", 1),
 				Inactive: "  " + row,
 				Selected: `{{ "✔" | green }} {{ .Name | bold }} {{ .ID | faint }}`,
 				Details: `
@@ -120,8 +121,20 @@ func connect() error {
 	if profile != "" {
 		args = append(args, "--profile", profile)
 	}
-	fmt.Println(dim("$ aws " + strings.Join(args, " ")))
-	c := exec.Command("aws", args...)
-	c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
-	return c.Run()
+	for {
+		fmt.Println(dim("$ aws " + strings.Join(args, " ")))
+		c := exec.Command("aws", args...)
+		c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
+		if err := c.Run(); err != nil {
+			fmt.Println(dim("session ended: " + err.Error()))
+		}
+		// Can't intercept exit inside the remote shell, so offer a one-keystroke way back instead.
+		_, err := (&promptui.Prompt{Label: fmt.Sprintf("Reconnect to %s as %s", h.Name, user), IsConfirm: true, Default: "y"}).Run()
+		if err == promptui.ErrAbort || err == promptui.ErrInterrupt || err == promptui.ErrEOF {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("reconnect prompt: %w", err)
+		}
+	}
 }
